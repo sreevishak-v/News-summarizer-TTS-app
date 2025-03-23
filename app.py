@@ -5,7 +5,7 @@ import os
 import time
 
 # API base URL (adjust for local testing or deployment)
-API_URL = "http://localhost:8000"  # Change to deployed URL for Hugging Face Spaces
+API_URL = "https://huggingface.co/spaces/sreevishak/News-Summarizer-API"  # Change to deployed URL for Hugging Face Spaces
 
 # Streamlit app configuration
 st.set_page_config(page_title="News Summarization & TTS", layout="wide")
