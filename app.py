@@ -1,16 +1,14 @@
 # app.py
 import streamlit as st
 import requests
-import os
 import time
 
-# API base URL (adjust for local testing or deployment)
-API_URL = "https://huggingface.co/spaces/sreevishak/News-Summarizer-API"  # Change to deployed URL for Hugging Face Spaces
+# API base URL
+API_URL = "https://sreevishak-news-summarizer-api.hf.space"  # Correct API endpoint
 
 # Streamlit app configuration
 st.set_page_config(page_title="News Summarization & TTS", layout="wide")
 
-# Title and description
 st.title("News Summarization & Text-to-Speech Application")
 st.markdown("""
     Enter a company name to fetch news articles, analyze their sentiment, 
@@ -25,13 +23,9 @@ num_articles = st.slider("Number of Articles", min_value=1, max_value=15, value=
 if st.button("Analyze"):
     with st.spinner("Fetching and analyzing news articles..."):
         try:
-            url = f"{API_URL}/analyze/{company_name}"
-            st.write(f"Debug URL: {url}?num_articles={num_articles}")
-            response = requests.get(url, params={"num_articles": num_articles}, timeout=30)
-            response.raise_for_status()
-            data = response.json()
             # Make API request
-            response = requests.get(f"{API_URL}/analyze/{company_name}", params={"num_articles": num_articles})
+            url = f"{API_URL}/analyze/{company_name}"
+            response = requests.get(url, params={"num_articles": num_articles}, timeout=30)
             response.raise_for_status()
             data = response.json()
 
@@ -59,15 +53,20 @@ if st.button("Analyze"):
             for insight in data["comparative_analysis"]["coverage_difference"]:
                 st.write(f"- {insight}")
 
-            # Display and play TTS audio
+            # Fetch and play TTS audio
             st.subheader("Hindi Audio Summary")
-            audio_file = data["audio"]
-            if os.path.exists(audio_file):
-                st.audio(audio_file, format="audio/mp3")
-                with open(audio_file, "rb") as f:
-                    st.download_button("Download Audio", f, file_name=audio_file)
+            audio_url = f"{API_URL}{data['audio']}"
+            audio_response = requests.get(audio_url, timeout=10)
+            if audio_response.status_code == 200:
+                st.audio(audio_response.content, format="audio/mp3")
+                st.download_button(
+                    "Download Audio",
+                    audio_response.content,
+                    file_name=f"audio_{company_name}.mp3",
+                    mime="audio/mp3"
+                )
             else:
-                st.error("Audio file not found. Please try again.")
+                st.error(f"Failed to fetch audio: {audio_response.status_code}")
 
         except requests.exceptions.RequestException as e:
             st.error(f"Error connecting to the API: {e}")
@@ -80,5 +79,4 @@ if st.button("Analyze"):
 st.markdown("---")
 
 if __name__ == "__main__":
-    # This block is optional since Streamlit is typically run via `streamlit run app.py`
     st.write("Run this app using: `streamlit run app.py`")
