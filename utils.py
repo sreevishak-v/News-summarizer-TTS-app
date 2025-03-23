@@ -1,5 +1,6 @@
 # utils.py
-import requests
+import nltk
+nltk.data.path.append('/app/nltk_data')
 from bs4 import BeautifulSoup
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk.corpus import stopwords
@@ -7,33 +8,50 @@ from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from collections import Counter
 from gtts import gTTS
 import os
+import requests
+import logging
+import sys
 
-sid = SentimentIntensityAnalyzer()
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
+
 STOP_WORDS = set(stopwords.words('english'))
+sid = SentimentIntensityAnalyzer()
 
 def fetch_articles(company_name, num_articles=10):
-    query = f"{company_name} news"
-    url = f"https://www.google.com/search?q={query}&tbm=nws"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
+    api_key = os.getenv("NEWSAPI_KEY")
+    if not api_key:
+        logger.error("NEWSAPI_KEY not set")
+        return []
+    url = f"https://newsapi.org/v2/everything?q={company_name}&apiKey={api_key}&language=en&sortBy=publishedAt"
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        logger.info(f"Fetching articles for {company_name} with URL: {url}")
+        response = requests.get(url, timeout=10)
         response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-        links = soup.select('div.SoaBEf a')  # Updated selector
+        data = response.json()
+        if data.get("status") != "ok":
+            logger.error(f"NewsAPI error: {data.get('message')}")
+            return []
         articles = []
-        for link in links[:num_articles]:
-            href = link.get('href', '')
-            if href.startswith('/url?q='):
-                href = href.split('/url?q=')[1].split('&')[0]
-            if href.startswith('http') and 'javascript' not in href.lower():
-                article = scrape_article(href)
-                if article:
-                    articles.append(article)
+        for item in data.get("articles", [])[:num_articles]:
+            content = item["description"] or item["content"] or "No content available"
+            if content:
+                articles.append({
+                    "title": item["title"],
+                    "content": content,
+                    "url": item["url"]
+                })
+        logger.info(f"Fetched {len(articles)} articles for {company_name}")
         return articles
+    except requests.RequestException as e:
+        logger.error(f"Error fetching articles from NewsAPI: {str(e)}")
+        return []
     except Exception as e:
-        print(f"Error fetching articles: {e}")
+        logger.error(f"Unexpected error in fetch_articles: {str(e)}")
         return []
 
 def scrape_article(url):
@@ -86,7 +104,7 @@ def extract_topics(text):
         print(f"Error extracting topics: {e}")
         return ["Error in Topic Extraction"]
 
-def generate_tts(text, output_file="output.mp3"):
+def generate_tts(text, output_file="/tmp/output.mp3"):
     try:
         if not text.strip():
             text = "कोई डेटा उपलब्ध नहीं है।"
@@ -103,15 +121,13 @@ def comparative_analysis(articles):
     sentiment_dist = {"Positive": 0, "Negative": 0, "Neutral": 0}
     for article in articles:
         sentiment_dist[article['sentiment']] += 1
-    
     coverage_diff = []
     if sentiment_dist["Positive"] > sentiment_dist["Negative"]:
-        coverage_diff.append("कवरेज ज्यादातर सकारात्मक है, जो मजबूत सार्वजनिक या बाजार समर्थन को दर्शाता है।")
+        coverage_diff.append("Coverage is mostly positive, indicating strong public or market support.")
     elif sentiment_dist["Negative"] > sentiment_dist["Positive"]:
-        coverage_diff.append("कवरेज मुख्य रूप से नकारात्मक है, जो चुनौतियों या विवादों का सुझाव देता है।")
+        coverage_diff.append("Coverage is mostly negative, suggesting challenges or controversies.")
     else:
-        coverage_diff.append("कवरेज सकारात्मक और नकारात्मक भावनाओं के बीच संतुलित है।")
-    
+        coverage_diff.append("Coverage is balanced between positive and negative sentiments.")
     return {
         "sentiment_distribution": sentiment_dist,
         "coverage_difference": coverage_diff
