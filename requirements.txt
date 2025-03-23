@@ -1,8 +1,6 @@
-streamlit
-beautifulsoup4
+fastapi
+uvicorn[standard]
 requests
-transformers
+beautifulsoup4
 nltk
 gtts
-fastapi
-uvicorn
